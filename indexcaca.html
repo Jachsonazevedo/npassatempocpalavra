@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passatempo Inteligente - Schola da Mente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            touch-action: none; /* Desabilita zoom por toque para melhor experiência no mobile */
+        }
+        /* Estilos para o efeito de confete */
+        .confetti {
+            position: absolute;
+            width: 8px;
+            height: 16px;
+            background: #f00;
+            top: -20px;
+            animation: fall 5s linear infinite;
+            border-radius: 4px;
+        }
+        @keyframes fall {
+            from { top: -20px; transform: rotate(0deg); }
+            to { top: 100vh; transform: rotate(720deg); }
+        }
+        /* Efeito de "riscado" na lista de palavras */
+        .word-found {
+            text-decoration: line-through;
+            text-decoration-color: #4ade80; /* green-400 */
+            text-decoration-thickness: 3px;
+            opacity: 0.7;
+            transition: all 0.3s ease;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Animação para moedas */
+        .coin-pop {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="w-full max-w-4xl mx-auto">
+        <!-- Tela de Início -->
+        <div id="start-screen" class="bg-white p-8 rounded-2xl shadow-xl text-center transition-opacity duration-500">
+            <h1 class="text-4xl md:text-5xl font-bold text-teal-600">Passatempo Inteligente</h1>
+            <p class="text-xl mt-2 text-slate-600">da Schola da Mente</p>
+            
+            <div class="mt-8 space-y-4 max-w-md mx-auto">
+                <div>
+                    <label for="player-name" class="block text-left font-semibold text-slate-700 mb-1">Seu Nome:</label>
+                    <input type="text" id="player-name" class="w-full px-4 py-3 border border-slate-300 rounded-lg text-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" placeholder="Digite seu nome aqui">
+                </div>
+                <div>
+                    <div class="flex justify-between items-center">
+                        <label for="theme-select" class="block text-left font-semibold text-slate-700 mb-1">Escolha um Tema:</label>
+                        <button id="gemini-btn" class="text-sm font-semibold text-teal-500 hover:text-teal-700 transition">✨ Criar Tema Novo</button>
+                    </div>
+                    <select id="theme-select" class="w-full px-4 py-3 border border-slate-300 rounded-lg text-lg bg-white focus:ring-2 focus:ring-teal-500 focus:outline-none"></select>
+                </div>
+                <div>
+                    <p class="block text-left font-semibold text-slate-700 mb-2">Escolha o Nível:</p>
+                    <div id="difficulty-select" class="flex justify-center gap-4">
+                        <button data-level="easy" class="level-btn w-full bg-green-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-green-600 transition-transform transform hover:scale-105">Fácil</button>
+                        <button data-level="medium" class="level-btn w-full bg-yellow-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-yellow-600 transition-transform transform hover:scale-105">Médio</button>
+                        <button data-level="advanced" class="level-btn w-full bg-red-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-red-600 transition-transform transform hover:scale-105">Avançado</button>
+                    </div>
+                </div>
+            </div>
+            <button id="tutorial-btn" class="mt-8 text-teal-600 hover:text-teal-800 font-semibold">Como Jogar?</button>
+        </div>
+
+        <!-- Tela do Jogo -->
+        <div id="game-screen" class="hidden transition-opacity duration-500">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Coluna da Esquerda (Palavras e Controles) -->
+                <div class="md:col-span-1 bg-white p-6 rounded-2xl shadow-xl flex flex-col">
+                    <div>
+                        <h2 class="text-2xl font-bold text-teal-600">Palavras</h2>
+                        <p id="game-theme" class="text-lg text-slate-500 mb-4"></p>
+                    </div>
+                    <div id="word-list" class="flex-grow space-y-2 text-xl md:text-2xl font-semibold overflow-y-auto">
+                        <!-- Lista de palavras será inserida aqui -->
+                    </div>
+                    <div class="mt-6 space-y-3">
+                         <div class="flex justify-between items-center text-lg bg-slate-100 p-3 rounded-lg">
+                            <span class="font-bold">Tempo:</span>
+                            <span id="timer" class="font-mono">00:00</span>
+                        </div>
+                        <div class="coin-pop flex justify-between items-center text-lg bg-yellow-100 p-3 rounded-lg border-2 border-transparent">
+                            <span class="font-bold">💰 Moedas:</span>
+                            <span id="coin-balance" class="font-mono font-bold">0</span>
+                        </div>
+                        <button id="restart-btn" class="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-yellow-600 transition-transform transform hover:scale-105">Reiniciar</button>
+                        <button id="new-game-btn" class="w-full bg-teal-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-teal-600 transition-transform transform hover:scale-105">Novo Jogo</button>
+                    </div>
+                </div>
+
+                <!-- Coluna da Direita (Grid do Caça-Palavras) -->
+                <div class="md:col-span-2 bg-white p-4 sm:p-6 rounded-2xl shadow-xl aspect-square flex items-center justify-center">
+                    <div id="grid-container" class="grid select-none cursor-pointer w-full h-full">
+                        <!-- Células do grid serão inseridas aqui -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Vitória -->
+    <div id="win-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+        <div id="confetti-container" class="absolute inset-0 overflow-hidden"></div>
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-md w-full transform transition-all scale-95 opacity-0">
+            <h2 id="win-message" class="text-4xl font-bold text-teal-600">Parabéns!</h2>
+            <p class="text-lg mt-4 text-slate-600">Você encontrou todas as palavras em <span id="final-time" class="font-bold"></span>!</p>
+            <p id="coins-earned-message" class="text-2xl mt-4 text-yellow-500 font-bold"></p>
+            <div class="mt-8">
+                <button id="play-again-btn" class="w-full bg-teal-500 text-white font-bold py-3 px-6 rounded-lg text-lg shadow-md hover:bg-teal-600 transition-transform transform hover:scale-105">Jogar Novamente</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal do Tutorial -->
+    <div id="tutorial-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-lg w-full relative">
+             <h2 class="text-3xl font-bold text-teal-600 mb-4">Como Jogar</h2>
+             <p class="text-lg text-slate-600 mb-4">
+                1. Na tela de jogo, você verá um quadro com letras e uma lista de palavras.
+             </p>
+             <p class="text-lg text-slate-600 mb-6">
+                2. Clique e arraste (ou toque e deslize) sobre as letras no quadro para formar as palavras da lista. As palavras podem estar na horizontal, vertical ou diagonal.
+             </p>
+             <p class="text-lg text-slate-600">
+                3. Encontre todas as palavras para vencer!
+             </p>
+             <button id="close-tutorial-btn" class="mt-8 w-full bg-teal-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-teal-600 transition-transform transform hover:scale-105">Entendi!</button>
+        </div>
+    </div>
+
+    <!-- Modal de Alerta -->
+    <div id="alert-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full relative">
+             <h2 class="text-2xl font-bold text-yellow-600 mb-4">Atenção</h2>
+             <p id="alert-message" class="text-lg text-slate-600">
+                <!-- Mensagem de alerta aqui -->
+             </p>
+             <button id="close-alert-btn" class="mt-8 w-full bg-yellow-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-yellow-600 transition-transform transform hover:scale-105">OK</button>
+        </div>
+    </div>
+
+    <!-- Modal Gemini para Criar Tema -->
+    <div id="gemini-theme-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full relative">
+            <h2 class="text-3xl font-bold text-teal-600 mb-4 text-center">✨ Criar um Tema Novo</h2>
+            <p class="text-center text-slate-600 mb-6">Digite uma ideia e a IA irá gerar as palavras para o caça-palavras!</p>
+            <div>
+                <label for="custom-theme-input" class="block text-left font-semibold text-slate-700 mb-1">Ideia para o tema:</label>
+                <input type="text" id="custom-theme-input" class="w-full px-4 py-3 border border-slate-300 rounded-lg text-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" placeholder="Ex: Planetas do Sistema Solar">
+            </div>
+            <div id="gemini-loader" class="hidden justify-center items-center mt-6">
+                 <div class="loader"></div>
+                 <p class="ml-4 text-slate-600">Criando palavras...</p>
+            </div>
+            <div class="mt-8 flex gap-4">
+                <button id="cancel-gemini-btn" class="w-full bg-slate-400 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-slate-500 transition">Cancelar</button>
+                <button id="generate-theme-btn" class="w-full bg-teal-500 text-white font-bold py-3 rounded-lg text-lg shadow-md hover:bg-teal-600 transition">Gerar Palavras</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- ELEMENTOS DO DOM ---
+            const startScreen = document.getElementById('start-screen');
+            const gameScreen = document.getElementById('game-screen');
+            const themeSelect = document.getElementById('theme-select');
+            const difficultyButtons = document.querySelectorAll('.level-btn');
+            const gridContainer = document.getElementById('grid-container');
+            const wordListContainer = document.getElementById('word-list');
+            const gameThemeEl = document.getElementById('game-theme');
+            const timerEl = document.getElementById('timer');
+            const playerNameInput = document.getElementById('player-name');
+            const restartBtn = document.getElementById('restart-btn');
+            const newGameBtn = document.getElementById('new-game-btn');
+            const coinBalanceEl = document.getElementById('coin-balance');
+            
+            const winModal = document.getElementById('win-modal');
+            const winMessage = document.getElementById('win-message');
+            const finalTimeEl = document.getElementById('final-time');
+            const playAgainBtn = document.getElementById('play-again-btn');
+            const confettiContainer = document.getElementById('confetti-container');
+            const coinsEarnedMessage = document.getElementById('coins-earned-message');
+
+            const tutorialBtn = document.getElementById('tutorial-btn');
+            const tutorialModal = document.getElementById('tutorial-modal');
+            const closeTutorialBtn = document.getElementById('close-tutorial-btn');
+
+            const alertModal = document.getElementById('alert-modal');
+            const alertMessage = document.getElementById('alert-message');
+            const closeAlertBtn = document.getElementById('close-alert-btn');
+
+            const geminiBtn = document.getElementById('gemini-btn');
+            const geminiThemeModal = document.getElementById('gemini-theme-modal');
+            const customThemeInput = document.getElementById('custom-theme-input');
+            const generateThemeBtn = document.getElementById('generate-theme-btn');
+            const cancelGeminiBtn = document.getElementById('cancel-gemini-btn');
+            const geminiLoader = document.getElementById('gemini-loader');
+
+            // --- DADOS DO JOGO ---
+            const themes = {
+                'Família': ['PAI', 'MAE', 'FILHO', 'FILHA', 'AVO', 'TIO', 'PRIMA', 'SOBRINHO', 'GENRO', 'NORA', 'CUNHADO'],
+                'Viagens': ['AVIAO', 'CARRO', 'MALA', 'HOTEL', 'PRAIA', 'PASSEIO', 'MAPA', 'FERIAS', 'DESTINO', 'PASSAGEM'],
+                'Corpo Humano': ['CABECA', 'OMBRO', 'JOELHO', 'PE', 'OLHOS', 'BOCA', 'NARIZ', 'ORELHA', 'BRACO', 'PERNA', 'CORACAO'],
+                'Casa': ['QUARTO', 'SALA', 'COZINHA', 'PORTA', 'JANELA', 'CADEIRA', 'MESA', 'SOFA', 'CAMA', 'BANHEIRO'],
+                'Dinheiro': ['MOEDA', 'NOTA', 'BANCO', 'CARTEIRA', 'SALARIO', 'POUPANCA', 'INVESTIR', 'RIQUEZA', 'FORTUNA', 'ECONOMIA'],
+                'Países': ['BRASIL', 'ARGENTINA', 'PORTUGAL', 'ESPANHA', 'ITALIA', 'FRANCA', 'JAPAO', 'CHINA', 'RUSSIA', 'CANADA'],
+                'Comidas': ['ARROZ', 'FEIJAO', 'CARNE', 'FRANGO', 'PEIXE', 'SALADA', 'FRUTA', 'PIZZA', 'PASTA', 'BOLO'],
+            };
+            
+            const difficultySettings = {
+                easy: { size: 10, wordCount: 5, bonus: 25 },
+                medium: { size: 12, wordCount: 8, bonus: 50 },
+                advanced: { size: 15, wordCount: 10, bonus: 100 },
+            };
+            const coinsPerWord = 5;
+
+            // --- ESTADO DO JOGO ---
+            let currentWords = [];
+            let wordsToFind = [];
+            let foundWords = new Set();
+            let grid = [];
+            let isSelecting = false;
+            let selection = [];
+            let timerInterval;
+            let seconds = 0;
+            let currentLevel = 'easy';
+            let currentTheme = 'Família';
+            let totalCoins = 0;
+            let coinsThisRound = 0;
+            
+            // --- EFEITOS SONOROS (RECOMPENSAS) ---
+            const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+            const playSound = (note, duration) => {
+                if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                synth.triggerAttackRelease(note, duration);
+            }
+            const playSuccessSound = () => playSound("C5", "8n");
+            const playCoinSound = () => playSound("A5", "16n");
+            const playWinSound = () => {
+                const now = Tone.now();
+                synth.triggerAttackRelease("C5", "8n", now);
+                synth.triggerAttackRelease("E5", "8n", now + 0.2);
+                synth.triggerAttackRelease("G5", "8n", now + 0.4);
+            }
+
+            // --- FUNÇÕES DE MOEDAS ---
+            const loadCoins = () => {
+                const savedCoins = localStorage.getItem('passatempoInteligenteCoins');
+                totalCoins = savedCoins ? parseInt(savedCoins, 10) : 0;
+                updateCoinDisplay(false); // Não animar no carregamento inicial
+            };
+
+            const saveCoins = () => {
+                localStorage.setItem('passatempoInteligenteCoins', totalCoins);
+            };
+            
+            const updateCoinDisplay = (animate = true) => {
+                coinBalanceEl.textContent = totalCoins;
+                if (animate) {
+                    const coinDisplay = coinBalanceEl.parentElement;
+                    coinDisplay.classList.add('transform', 'scale-110', 'bg-yellow-300', 'border-yellow-400');
+                    setTimeout(() => {
+                        coinDisplay.classList.remove('transform', 'scale-110', 'bg-yellow-300', 'border-yellow-400');
+                    }, 300);
+                }
+            };
+
+            const addCoins = (amount) => {
+                totalCoins += amount;
+                coinsThisRound += amount;
+                playCoinSound();
+                updateCoinDisplay();
+                saveCoins();
+            };
+
+            // --- FUNÇÕES DO JOGO ---
+            const initializeThemes = () => {
+                themeSelect.innerHTML = '';
+                for (const theme in themes) {
+                    const option = document.createElement('option');
+                    option.value = theme;
+                    option.textContent = theme;
+                    themeSelect.appendChild(option);
+                }
+            };
+            
+            const createPuzzle = (size, words) => {
+                let newGrid = Array.from({ length: size }, () => Array(size).fill(null));
+                let placedWords = [];
+
+                const directions = [
+                    { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: -1, y: 1 },
+                    { x: -1, y: 0 }, { x: 0, y: -1 }, { x: -1, y: -1 }, { x: 1, y: -1 }
+                ];
+
+                for (const word of words) {
+                    let placed = false;
+                    let attempts = 0;
+                    while (!placed && attempts < 100) {
+                        attempts++;
+                        const dir = directions[Math.floor(Math.random() * directions.length)];
+                        const startX = Math.floor(Math.random() * size);
+                        const startY = Math.floor(Math.random() * size);
+                        
+                        const endX = startX + (word.length - 1) * dir.x;
+                        const endY = startY + (word.length - 1) * dir.y;
+                        
+                        if (endX >= 0 && endX < size && endY >= 0 && endY < size) {
+                            let canPlace = true;
+                            for (let i = 0; i < word.length; i++) {
+                                const checkX = startX + i * dir.x;
+                                const checkY = startY + i * dir.y;
+                                if (newGrid[checkY][checkX] !== null && newGrid[checkY][checkX] !== word[i]) {
+                                    canPlace = false;
+                                    break;
+                                }
+                            }
+                            if (canPlace) {
+                                for (let i = 0; i < word.length; i++) {
+                                    newGrid[startY + i * dir.y][startX + i * dir.x] = word[i];
+                                }
+                                placedWords.push(word);
+                                placed = true;
+                            }
+                        }
+                    }
+                }
+                
+                const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        if (newGrid[y][x] === null) {
+                            newGrid[y][x] = alphabet[Math.floor(Math.random() * alphabet.length)];
+                        }
+                    }
+                }
+                return { grid: newGrid, placedWords };
+            };
+
+            const renderGrid = () => {
+                gridContainer.innerHTML = '';
+                const size = grid.length;
+                gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+                grid.forEach((row, y) => {
+                    row.forEach((letter, x) => {
+                        const cell = document.createElement('div');
+                        cell.textContent = letter;
+                        cell.dataset.x = x;
+                        cell.dataset.y = y;
+                        cell.className = 'flex items-center justify-center text-lg sm:text-2xl lg:text-3xl font-bold aspect-square bg-slate-100 rounded-md transition-colors duration-200';
+                        gridContainer.appendChild(cell);
+                    });
+                });
+            };
+
+            const renderWordList = () => {
+                wordListContainer.innerHTML = '';
+                wordsToFind.sort().forEach(word => {
+                    const p = document.createElement('p');
+                    p.id = `word-${word}`;
+                    p.textContent = word;
+                    p.className = "p-2 rounded-md transition-all duration-300";
+                    wordListContainer.appendChild(p);
+                });
+            };
+            
+            const startTimer = () => {
+                seconds = 0;
+                clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    seconds++;
+                    const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+                    const sec = (seconds % 60).toString().padStart(2, '0');
+                    timerEl.textContent = `${min}:${sec}`;
+                }, 1000);
+            };
+
+            const stopTimer = () => {
+                clearInterval(timerInterval);
+            };
+
+            const startGame = (theme, level) => {
+                currentTheme = theme;
+                currentLevel = level;
+                coinsThisRound = 0;
+                
+                if (!themes[theme]) {
+                    showAlert("Tema não encontrado. Por favor, escolha outro.");
+                    return;
+                }
+                
+                const settings = difficultySettings[level];
+                const themeWords = themes[theme].map(w => w.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z]/g, ''));
+                
+                currentWords = [...themeWords].sort(() => 0.5 - Math.random()).slice(0, settings.wordCount);
+                
+                const puzzle = createPuzzle(settings.size, currentWords);
+                grid = puzzle.grid;
+                wordsToFind = puzzle.placedWords;
+
+                if (wordsToFind.length < settings.wordCount / 2) { // Garante que a maioria das palavras foi inserida
+                    showAlert("Não foi possível gerar um bom caça-palavras para este tema. Tente novamente ou escolha outro.");
+                    return;
+                }
+
+                foundWords.clear();
+                gameThemeEl.textContent = `${theme} - ${level.charAt(0).toUpperCase() + level.slice(1)}`;
+
+                renderGrid();
+                renderWordList();
+                startTimer();
+
+                startScreen.classList.add('opacity-0');
+                setTimeout(() => {
+                    startScreen.classList.add('hidden');
+                    gameScreen.classList.remove('hidden');
+                    gameScreen.classList.remove('opacity-0');
+                }, 500);
+            };
+
+            // --- LÓGICA DE SELEÇÃO ---
+            const getCellFromEvent = (e) => {
+                const target = e.type.startsWith('touch') ? document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY) : e.target;
+                if (target && target.dataset.x !== undefined) { return target; }
+                return null;
+            };
+
+            const handleSelectionStart = (e) => {
+                e.preventDefault();
+                const cell = getCellFromEvent(e);
+                if (cell) {
+                    isSelecting = true;
+                    selection = [cell];
+                    highlightSelection();
+                }
+            };
+
+            const handleSelectionMove = (e) => {
+                if (!isSelecting) return;
+                e.preventDefault();
+                const cell = getCellFromEvent(e);
+                if (cell && !selection.find(c => c === cell)) {
+                    const startCell = selection[0];
+                    const endCell = cell;
+                    const dx = endCell.dataset.x - startCell.dataset.x;
+                    const dy = endCell.dataset.y - startCell.dataset.y;
+
+                    if (dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy)) {
+                        const newSelection = [startCell];
+                        const steps = Math.max(Math.abs(dx), Math.abs(dy));
+                        const xStep = Math.sign(dx);
+                        const yStep = Math.sign(dy);
+
+                        for (let i = 1; i <= steps; i++) {
+                            const nextX = parseInt(startCell.dataset.x) + i * xStep;
+                            const nextY = parseInt(startCell.dataset.y) + i * yStep;
+                            const nextCell = gridContainer.querySelector(`[data-x='${nextX}'][data-y='${nextY}']`);
+                            if (nextCell) { newSelection.push(nextCell); }
+                        }
+                        selection = newSelection;
+                        highlightSelection();
+                    }
+                }
+            };
+            
+            const handleSelectionEnd = () => {
+                if (!isSelecting) return;
+                isSelecting = false;
+                
+                const selectedWord = selection.map(cell => cell.textContent).join('');
+                const reversedWord = selectedWord.split('').reverse().join('');
+
+                if (wordsToFind.includes(selectedWord) && !foundWords.has(selectedWord)) {
+                    foundWords.add(selectedWord);
+                    markWordAsFound(selectedWord, selection);
+                } else if (wordsToFind.includes(reversedWord) && !foundWords.has(reversedWord)) {
+                    foundWords.add(reversedWord);
+                    markWordAsFound(reversedWord, selection);
+                } else {
+                     clearHighlight();
+                }
+            };
+
+            const highlightSelection = () => {
+                clearHighlight(false);
+                selection.forEach(cell => cell.classList.add('bg-teal-300', 'text-white'));
+            };
+
+            const clearHighlight = (clearAll = true) => {
+                gridContainer.querySelectorAll('div').forEach(cell => {
+                    if(!cell.dataset.found) { cell.classList.remove('bg-teal-300', 'text-white'); }
+                });
+                if(clearAll) selection = [];
+            };
+
+            const markWordAsFound = (word, cells) => {
+                playSuccessSound();
+                addCoins(coinsPerWord);
+
+                cells.forEach(cell => {
+                    cell.classList.remove('bg-teal-300');
+                    cell.classList.add('bg-green-400', 'text-white');
+                    cell.dataset.found = true;
+                    cell.classList.add('transform', 'scale-110');
+                    setTimeout(() => cell.classList.remove('transform', 'scale-110'), 200);
+                });
+
+                document.getElementById(`word-${word}`)?.classList.add('word-found');
+                checkWinCondition();
+            };
+
+            const checkWinCondition = () => {
+                if (foundWords.size === wordsToFind.length) {
+                    stopTimer();
+                    const bonus = difficultySettings[currentLevel].bonus;
+                    addCoins(bonus);
+                    playWinSound();
+                    
+                    const playerName = playerNameInput.value || "Jogador";
+                    winMessage.textContent = `Parabéns, ${playerName}!`;
+                    finalTimeEl.textContent = timerEl.textContent;
+                    coinsEarnedMessage.textContent = `Você ganhou +${coinsThisRound} moedas! 💰`;
+                    
+                    setTimeout(showWinModal, 500);
+                }
+            };
+            
+            const showWinModal = () => {
+                winModal.classList.remove('hidden');
+                triggerConfetti();
+                setTimeout(() => {
+                    winModal.querySelector('div > div').classList.remove('scale-95', 'opacity-0');
+                }, 10);
+            };
+
+            const hideWinModal = () => {
+                 const modalContent = winModal.querySelector('div > div');
+                 modalContent.classList.add('scale-95', 'opacity-0');
+                 setTimeout(() => {
+                    winModal.classList.add('hidden');
+                    confettiContainer.innerHTML = '';
+                 }, 300);
+            };
+            
+            const triggerConfetti = () => {
+                for (let i = 0; i < 100; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + 'vw';
+                    confetti.style.animationDelay = Math.random() * 3 + 's';
+                    confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                    confettiContainer.appendChild(confetti);
+                }
+            };
+            
+            const resetGameScreen = () => {
+                gameScreen.classList.add('opacity-0');
+                 setTimeout(() => {
+                    gameScreen.classList.add('hidden');
+                    startScreen.classList.remove('hidden');
+                    setTimeout(() => startScreen.classList.remove('opacity-0'), 50);
+                }, 500);
+            }
+            
+            const showAlert = (message) => {
+                alertMessage.textContent = message;
+                alertModal.classList.remove('hidden');
+            };
+
+            // --- GEMINI API ---
+            const callGeminiApi = async (prompt, retries = 3, delay = 1000) => {
+                const apiKey = ""; 
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: { words: { type: "ARRAY", items: { type: "STRING" } } },
+                            required: ["words"]
+                        }
+                    }
+                };
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text) return JSON.parse(text);
+                    throw new Error("Resposta inválida da API.");
+                } catch (error) {
+                    console.error("Erro na chamada da API:", error);
+                    if (retries > 0) {
+                        await new Promise(res => setTimeout(res, delay));
+                        return callGeminiApi(prompt, retries - 1, delay * 2);
+                    }
+                    return null;
+                }
+            };
+
+            const handleGenerateTheme = async () => {
+                const userPrompt = customThemeInput.value.trim();
+                if (!userPrompt) {
+                    showAlert("Por favor, digite uma ideia para o tema.");
+                    return;
+                }
+
+                geminiLoader.classList.remove('hidden');
+                geminiLoader.classList.add('flex');
+                generateThemeBtn.disabled = true;
+                cancelGeminiBtn.disabled = true;
+
+                const systemPrompt = `Gere uma lista de 12 a 15 palavras em português do Brasil, sem acentos e em maiúsculas, para um jogo de caça-palavras sobre o tema: "${userPrompt}". As palavras devem ter entre 3 e 10 letras. Retorne apenas o JSON.`;
+                const result = await callGeminiApi(systemPrompt);
+
+                geminiLoader.classList.add('hidden');
+                geminiLoader.classList.remove('flex');
+                generateThemeBtn.disabled = false;
+                cancelGeminiBtn.disabled = false;
+
+                if (result && result.words && result.words.length > 0) {
+                    const themeName = userPrompt.charAt(0).toUpperCase() + userPrompt.slice(1);
+                    themes[themeName] = result.words;
+                    initializeThemes();
+                    themeSelect.value = themeName;
+                    geminiThemeModal.classList.add('hidden');
+                    customThemeInput.value = '';
+                } else {
+                    showAlert("Não foi possível gerar palavras para este tema. Tente ser mais específico ou use outra ideia.");
+                }
+            };
+
+            // --- EVENT LISTENERS ---
+            difficultyButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const level = button.dataset.level;
+                    const theme = themeSelect.value;
+                    if (playerNameInput.value.trim() === "") {
+                        playerNameInput.focus();
+                        playerNameInput.classList.add('border-red-500');
+                        showAlert("Por favor, digite seu nome para começar.");
+                        return;
+                    }
+                    playerNameInput.classList.remove('border-red-500');
+                    startGame(theme, level);
+                });
+            });
+
+            restartBtn.addEventListener('click', () => startGame(currentTheme, currentLevel));
+            newGameBtn.addEventListener('click', resetGameScreen);
+            playAgainBtn.addEventListener('click', () => {
+                hideWinModal();
+                resetGameScreen();
+            });
+            
+            tutorialBtn.addEventListener('click', () => tutorialModal.classList.remove('hidden'));
+            closeTutorialBtn.addEventListener('click', () => tutorialModal.classList.add('hidden'));
+            closeAlertBtn.addEventListener('click', () => alertModal.classList.add('hidden'));
+
+            geminiBtn.addEventListener('click', () => geminiThemeModal.classList.remove('hidden'));
+            cancelGeminiBtn.addEventListener('click', () => geminiThemeModal.classList.add('hidden'));
+            generateThemeBtn.addEventListener('click', handleGenerateTheme);
+            customThemeInput.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') handleGenerateTheme();
+            });
+
+            // Grid Listeners
+            gridContainer.addEventListener('mousedown', handleSelectionStart);
+            gridContainer.addEventListener('mousemove', handleSelectionMove);
+            document.addEventListener('mouseup', handleSelectionEnd);
+            gridContainer.addEventListener('touchstart', handleSelectionStart, { passive: false });
+            gridContainer.addEventListener('touchmove', handleSelectionMove, { passive: false });
+            document.addEventListener('touchend', handleSelectionEnd);
+            
+            // --- INICIALIZAÇÃO ---
+            initializeThemes();
+            loadCoins();
+
+            if (!localStorage.getItem('passatempoInteligenteVisited')) {
+                tutorialModal.classList.remove('hidden');
+                localStorage.setItem('passatempoInteligenteVisited', 'true');
+            }
+        });
+    </script>
+</body>
+</html>
